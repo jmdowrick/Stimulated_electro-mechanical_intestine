@@ -66,8 +66,13 @@ problem = dolfinx.fem.petsc.LinearProblem(a, L, u=v_h,
                                           petsc_options={"ksp_type": "cg", "pc_type": "hypre"})
 
 # --- Output ---
-shutil.rmtree(f"../results/electro {datetime.now()}.bp", ignore_errors=True)
-vtx = dolfinx.io.VTXWriter(MPI.COMM_WORLD, f"../results/electro {datetime.now()}.bp", [v_h], engine="BP4")
+run_id = datetime.now().strftime("%Y%m%d_%H%M%S")
+run_id = MPI.COMM_WORLD.bcast(run_id, root=0)
+output_path = f"../results/electro_{run_id}.bp"
+if MPI.COMM_WORLD.rank == 0:
+    shutil.rmtree(output_path, ignore_errors=True)
+MPI.COMM_WORLD.Barrier()
+vtx = dolfinx.io.VTXWriter(MPI.COMM_WORLD, output_path, [v_h], engine="BP4")
 
 # --- Time loop ---
 T = 100000.0
@@ -106,7 +111,10 @@ while t < T:
     states[:, v_index] = v_h.x.array
 
     if i % 100 == 0:
-        print(f"t={t:.1f} ms  V_max={v_h.x.array.max():.2f}  V_min={v_h.x.array.min():.2f}")
+        global_max = MPI.COMM_WORLD.allreduce(v_h.x.array.max(), op=MPI.MAX)
+        global_min = MPI.COMM_WORLD.allreduce(v_h.x.array.min(), op=MPI.MIN)
+        if MPI.COMM_WORLD.rank == 0:
+            print(f"t={t:.1f} ms  V_max={global_max:.2f}  V_min={global_min:.2f}")
         vtx.write(t)
 
     t += dt
