@@ -7,7 +7,7 @@ import numpy as np
 from src.assets.cellml import imtiaz_2002d_noTstart_COR as model
 
 # --- Mesh ---
-mesh_data = dolfinx.io.gmsh.read_from_msh("../assets/mesh/tube.msh", MPI.COMM_WORLD)
+mesh_data = dolfinx.io.gmsh.read_from_msh("../assets/mesh/tube_refined.msh", MPI.COMM_WORLD)
 mesh = mesh_data.mesh
 
 # --- Function space ---
@@ -28,9 +28,15 @@ n_nodes = V.dofmap.index_map.size_local
 states = np.tile(model.init_state_values(), (n_nodes, 1))
 parameters = np.tile(model.init_parameter_values(), (n_nodes, 1))
 
+eta_func = dolfinx.fem.Function(V)
+eta_func.interpolate(lambda x: 0.0389 + 0.1 * (x[2] / 100))
+
+eta_idx = model.parameter_index("eta")
+parameters[:, eta_idx] = eta_func.x.array
+
 # --- Weak form ---
-dt = 0.1
-C_m = 1.0
+dt = 1
+C_m = 10.0
 M = 0.01
 
 dx = ufl.Measure("dx", domain=mesh)
@@ -44,32 +50,33 @@ problem = dolfinx.fem.petsc.LinearProblem(a, L, u=v_h,
                                           petsc_options={"ksp_type": "cg", "pc_type": "hypre"})
 
 # --- Output ---
-shutil.rmtree("imtiaz_mesh.bp", ignore_errors=True)
-vtx = dolfinx.io.VTXWriter(MPI.COMM_WORLD, "imtiaz_mesh.bp", [v_h], engine="BP4")
+shutil.rmtree("imtiaz_mesh_time.bp", ignore_errors=True)
+vtx = dolfinx.io.VTXWriter(MPI.COMM_WORLD, "imtiaz_mesh_time.bp", [v_h], engine="BP4")
 
 # --- Time loop ---
-T = 10000.0
+T = 2000.0
 t = 0.0
 i = 0
 
 while t < T:
-    # Step 1: ODE step
-    states[:, v_index] = v_n.x.array
+    # ODE step
     v_old = v_n.x.array.copy()
+    states[:, v_index] = v_old
 
     for node in range(n_nodes):
         states[node, :] = model.generalized_rush_larsen(
             states[node, :], t, dt, parameters[node, :]
         )
 
-    I_ion.x.array[:] = (states[:, v_index] - v_old) / dt
+    I_ion.x.array[:] = C_m*(states[:, v_index] - v_old) / dt
+    I_ion.x.scatter_forward()
 
-    # Step 2: PDE step
+    # PDE step
     problem.solve()
     v_n.x.array[:] = v_h.x.array
     states[:, v_index] = v_h.x.array
 
-    if i % 1000 == 0:
+    if i % 10 == 0:
         print(f"t={t:.1f} ms  V_max={v_h.x.array.max():.2f}  V_min={v_h.x.array.min():.2f}")
         vtx.write(t)
 
