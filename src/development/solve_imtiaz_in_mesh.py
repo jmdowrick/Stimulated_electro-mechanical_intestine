@@ -5,6 +5,9 @@ import dolfinx.fem.petsc
 import ufl
 import numpy as np
 from src.assets.cellml import imtiaz_2002d_noTstart_COR as model
+
+import os
+os.environ["NUMBA_CACHE_DIR"] = f"/tmp/numba_rank_{MPI.COMM_WORLD.rank}"
 import numba
 from datetime import datetime
 
@@ -18,6 +21,7 @@ V = dolfinx.fem.functionspace(mesh, ("P", 1))
 # --- Functions ---
 v_h = dolfinx.fem.Function(V)
 v_n = dolfinx.fem.Function(V)
+v_star = dolfinx.fem.Function(V)
 u = ufl.TrialFunction(V)
 phi = ufl.TestFunction(V)
 
@@ -25,27 +29,37 @@ v_index = model.state_index("V_m")
 v_h.x.array[:] = model.init_state_values()[v_index]
 v_n.x.array[:] = model.init_state_values()[v_index]
 
-# --- ODE states and parameters (per node) ---
+# --- ODE states and parameters ---
 n_nodes = V.dofmap.index_map.size_local
 states = np.tile(model.init_state_values(), (n_nodes, 1))
 parameters = np.tile(model.init_parameter_values(), (n_nodes, 1))
 
-eta_func = dolfinx.fem.Function(V)
-eta_func.interpolate(lambda x: 0.0389 + 0.1 * (x[2] / 100))
+# beta - sets rate of depolarisation
+beta_func = dolfinx.fem.Function(V)
+beta_func.interpolate(lambda x: 0.000975 - 0.0001 * (x[2] / 100))
 
-eta_idx = model.parameter_index("eta")
-parameters[:, eta_idx] = eta_func.x.array
+beta_idx = model.parameter_index("beta_")
+parameters[:, beta_idx] = beta_func.x.array
+
+# stimulator
+I_stim_idx = model.parameter_index("I_stim")
+stim_amp = 100
+stim_start = 20000
+stim_duration = 200
+stim_period = 18000
+
+local_coords = V.tabulate_dof_coordinates()[:n_nodes]
+stim_mask = (local_coords[:, 2] >= 50) & (local_coords[:, 2] <= 55)
 
 # --- Weak form ---
 dt = 1
-C_m = 0.1
-M = 0.1
+C_m = 1
+M = 1
 
 dx = ufl.Measure("dx", domain=mesh)
-I_ion = dolfinx.fem.Function(V)
 
 a = C_m * ufl.inner(u, phi) * dx + dt * M * ufl.inner(ufl.grad(u), ufl.grad(phi)) * dx
-L = C_m * ufl.inner(v_n, phi) * dx + dt * ufl.inner(I_ion, phi) * dx
+L = C_m * ufl.inner(v_star, phi) * dx
 
 problem = dolfinx.fem.petsc.LinearProblem(a, L, u=v_h,
                                           petsc_options_prefix="test",
@@ -71,14 +85,20 @@ def solve_all_odes(states, t, dt, parameters, n_nodes):
     return states
 
 while t < T:
+    # Stimulator
+    if t >= stim_start and (t - stim_start) % stim_period <= stim_duration:
+        parameters[stim_mask, I_stim_idx] = stim_amp
+    else:
+        parameters[stim_mask, I_stim_idx] = 0.0
+
     # ODE step
     v_old = v_n.x.array.copy()
     states[:, v_index] = v_old
 
     states = solve_all_odes(states, t, dt, parameters, n_nodes)
 
-    I_ion.x.array[:] = C_m*(states[:, v_index] - v_old) / dt
-    I_ion.x.scatter_forward()
+    v_star.x.array[:] = states[:, v_index]
+    v_star.x.scatter_forward()
 
     # PDE step
     problem.solve()
