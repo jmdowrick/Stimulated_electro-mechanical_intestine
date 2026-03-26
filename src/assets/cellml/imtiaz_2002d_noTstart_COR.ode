@@ -1,0 +1,106 @@
+states("intracellular_Ca",
+Ca_c=ScalarParam(0.2886, unit="mM", description=""),
+Ca_s=ScalarParam(2.0014, unit="mM", description=""),
+IP_3=ScalarParam(0.3791, unit="mM", description="")
+)
+
+states("Membrane",
+V_m=ScalarParam(-70.5156, unit="mV", description="")
+)
+
+states("d_Na",
+d_Na_d_Na=ScalarParam(0, unit="1", description="")
+)
+
+states("f_Na",
+f_Na_f_Na=ScalarParam(0.9997, unit="1", description="")
+)
+
+parameters("Membrane",
+C_m=ScalarParam(26.0, unit="pF", description=""),
+Cor=ScalarParam(2.0, unit="1", description=""),
+I_stim=ScalarParam(0.0, unit="pA", description="")
+)
+
+parameters("i_Ca",
+E_Ca=ScalarParam(-20.0, unit="mV", description=""),
+G_MCa=ScalarParam(4.0, unit="nS", description=""),
+k_Ca=ScalarParam(0.94, unit="mM", description=""),
+q=ScalarParam(4.0, unit="1", description="")
+)
+
+parameters("i_BK",
+E_K=ScalarParam(-72.0, unit="mV", description=""),
+G_max_BK=ScalarParam(1.2, unit="nS", description="")
+)
+
+parameters("i_Na",
+E_Na=ScalarParam(80.0, unit="mV", description=""),
+G_Na=ScalarParam(28.0, unit="nS", description="")
+)
+
+parameters("intracellular_Ca",
+K=ScalarParam(0.0006435, unit="mS/uF", description=""),
+P_MV=ScalarParam(0.0325, unit="mM/ms", description=""),
+V_0=ScalarParam(0.0002145, unit="mM/ms", description=""),
+V_1=ScalarParam(0.00022094, unit="mS/uF", description=""),
+V_M2=ScalarParam(0.0049, unit="mM/ms", description=""),
+V_M3=ScalarParam(0.3224, unit="mM/ms", description=""),
+V_M4=ScalarParam(0.0004875, unit="mM/ms", description=""),
+beta_=ScalarParam(0.000975, unit="mM/ms", description=""),
+eta=ScalarParam(0.0389, unit="mS/uF", description=""),
+k_2=ScalarParam(1.0, unit="mM", description=""),
+k_4=ScalarParam(0.5, unit="mM", description=""),
+k_a=ScalarParam(0.9, unit="mM", description=""),
+k_f=ScalarParam(5.85e-05, unit="mS/uF", description=""),
+k_p=ScalarParam(0.65, unit="mM", description=""),
+k_r=ScalarParam(2.0, unit="mM", description=""),
+k_v=ScalarParam(-68.0, unit="mV", description=""),
+m=ScalarParam(4.0, unit="1", description=""),
+n=ScalarParam(2.0, unit="1", description=""),
+o=ScalarParam(4.0, unit="1", description=""),
+r=ScalarParam(8.0, unit="1", description=""),
+u=ScalarParam(4.0, unit="1", description=""),
+w=ScalarParam(4.0, unit="1", description="")
+)
+
+parameters("d_Na",
+tau_d_Na=ScalarParam(10.26, unit="ms", description="")
+)
+
+parameters("f_Na",
+tau_f_Na=ScalarParam(112.82, unit="ms", description="")
+)
+
+expressions("i_Ca")
+G_Ca = (Ca_c**q*G_MCa)/(Ca_c**q + k_Ca**q) # nS
+I_Ca = G_Ca*(-E_Ca + V_m) # pA
+
+expressions("i_BK")
+I_BK = (G_max_BK*d_BK_d_BK)*(-E_K + V_m) # pA
+
+expressions("i_Na")
+I_Na = (d_Na_d_Na*(G_Na*f_Na_f_Na))*(-E_Na + V_m) # pA
+
+expressions("intracellular_Ca")
+V_2 = (Ca_c**n*V_M2)/(Ca_c**n + k_2**n) # mM/ms
+V_3 = (IP_3**o*((Ca_s**m*((Ca_c**w*V_M3)/(Ca_c**w + k_a**w)))/(Ca_s**m + k_r**m)))/(IP_3**o + k_p**o) # mM/ms
+V_in = IP_3*V_1 + V_0 # mM/ms
+dCa_c_dt = Cor*(-Ca_c*K + (Ca_s*k_f + (V_3 + (-V_2 + V_in)))) # mM
+dCa_s_dt = Cor*(-Ca_s*k_f + (V_2 - V_3)) # mM
+dIP_3_dt = Cor*(P_MV*(1.0 - V_m**r/(V_m**r + k_v**r)) + (-IP_3**u*V_M4/(IP_3**u + k_4**u) + (-IP_3*eta + beta_))) # mM
+
+expressions("d_BK")
+d_BK_d_BK = 1.0/(exp(V_m/((-1*17.0)) - 2.0*log(Ca_c/0.001)) + 1.0)
+
+expressions("d_Na")
+d_inf_Na = 1.0/(exp((V_m + 7.0)/((-1*5.0))) + 1.0)
+dd_Na_d_Na_dt = (Cor*(-d_Na_d_Na + d_inf_Na))/tau_d_Na
+
+expressions("f_Na")
+f_inf_Na = 1.0/(exp((V_m + 37.4)/4.0) + 1.0)
+df_Na_f_Na_dt = (Cor*(-f_Na_f_Na + f_inf_Na))/tau_f_Na
+
+expressions("Membrane")
+dV_m_dt = ((-Cor)*(-I_stim + (I_BK + (I_Ca + I_Na))))/C_m # mV
+
