@@ -12,7 +12,7 @@ import numba
 from datetime import datetime
 
 # --- Mesh ---
-mesh_data = dolfinx.io.gmsh.read_from_msh("./assets/mesh/tube_refined.msh", MPI.COMM_WORLD)
+mesh_data = dolfinx.io.gmsh.read_from_msh("assets/mesh/tube_refined.msh", MPI.COMM_WORLD)
 mesh = mesh_data.mesh
 
 # --- Function space ---
@@ -68,7 +68,7 @@ problem = dolfinx.fem.petsc.LinearProblem(a, L, u=v_h,
 # --- Output ---
 run_id = datetime.now().strftime("%Y%m%d_%H%M%S")
 run_id = MPI.COMM_WORLD.bcast(run_id, root=0)
-output_path = f"../results/electro_{run_id}.bp"
+output_path = f"results/electro_{run_id}.bp"
 if MPI.COMM_WORLD.rank == 0:
     shutil.rmtree(output_path, ignore_errors=True)
 MPI.COMM_WORLD.Barrier()
