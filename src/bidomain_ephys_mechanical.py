@@ -17,7 +17,7 @@ from datetime import datetime
 comm = MPI.COMM_WORLD
 
 # --- Mesh ---
-mesh_data = dolfinx.io.gmsh.read_from_msh("../assets/mesh/tube_refined.msh", comm)
+mesh_data = dolfinx.io.gmsh.read_from_msh("assets/mesh/tube_refined.msh", comm)
 mesh = mesh_data.mesh
 
 # --- Function spaces ---
@@ -131,7 +131,7 @@ problem = dolfinx.fem.petsc.LinearProblem(
 # --- Output ---
 run_id = datetime.now().strftime("%Y%m%d %H%M%S")
 run_id = comm.bcast(run_id, root=0)
-output_path = f"../results/{run_id} bidomain.bp"
+output_path = f"results/{run_id} bidomain.bp"
 
 V_m_out = dolfinx.fem.Function(V_m_space, name="V_m")
 V_e_out = dolfinx.fem.Function(V_m_space, name="V_e")
