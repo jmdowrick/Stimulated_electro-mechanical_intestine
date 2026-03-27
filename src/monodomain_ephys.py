@@ -12,7 +12,7 @@ import numba
 from datetime import datetime
 
 # --- Mesh ---
-mesh_data = dolfinx.io.gmsh.read_from_msh("../assets/mesh/tube_refined.msh", MPI.COMM_WORLD)
+mesh_data = dolfinx.io.gmsh.read_from_msh("./assets/mesh/tube_refined.msh", MPI.COMM_WORLD)
 mesh = mesh_data.mesh
 
 # --- Function space ---
@@ -75,7 +75,7 @@ MPI.COMM_WORLD.Barrier()
 vtx = dolfinx.io.VTXWriter(MPI.COMM_WORLD, output_path, [v_h], engine="BP4")
 
 # --- Time loop ---
-T = 100000.0
+T = 50000.0
 t = 0.0
 i = 0
 
