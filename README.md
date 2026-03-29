@@ -16,17 +16,16 @@ The simulation solves the bidomain equations on a 3D tubular mesh, coupled to:
 ## Repository Structure (Main Items)
 
 ```
-.
-├── assets/
-│   └── mesh/
-│       └── tube_refined.msh        # Gmsh mesh file
+.  
 ├── src/
-│   └── assets/
-│       └── cellml/
-│           └── imtiaz_2002d_noTstart_COR.py   # CellML-derived ODE model
-├── results/                         # Simulation output (auto-created)
-├── bidomain_ephys_mechanical.py     # Main simulation script
-├── environment.yml                  # Conda environment specification
+│   ├── assets/
+│   │    ├── cellml/
+│   │    │    └── imtiaz_2002d_noTstart_COR.py   # CellML-derived ODE model
+│   │    └── mesh/
+│   │         └── tube_refined.msh               # Gmsh mesh file
+│   └── bidomain_ephys_mechanical.py             # Main simulation script
+├── results/                                     # Simulation output (auto-created)
+├── environment.yml                              # Conda environment specification
 └── README.md
 ```
 
