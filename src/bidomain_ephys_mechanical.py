@@ -9,6 +9,7 @@ import numpy as np
 from petsc4py import PETSc
 from src.assets.cellml import imtiaz_2002d_noTstart_COR as model
 import os
+import time
 
 os.environ["NUMBA_CACHE_DIR"] = f"/tmp/numba_rank_{MPI.COMM_WORLD.rank}"
 import numba
@@ -75,12 +76,13 @@ parameters[:, model.parameter_index("beta_")] = beta_func.x.array[:n_nodes]
 # Stimulator
 I_stim_idx = model.parameter_index("I_stim")
 stim_amp = 100
-stim_start = 10000
-stim_duration = 200
-stim_period = 18000
+stim_start = 100000
+stim_duration = 50
+stim_period = 15000
+stim_end = 250000
 
 local_coords = V_m_space.tabulate_dof_coordinates()[:n_nodes]
-stim_mask = (local_coords[:, 2] >= 50) & (local_coords[:, 2] <= 55)
+stim_mask = (local_coords[:, 2] >= 90) & (local_coords[:, 2] <= 92)
 
 # Extract Ca2+
 ca_idx = model.state_index("Ca_c")
@@ -90,12 +92,12 @@ Ca_func.x.scatter_forward()
 
 # --- Compute active tension ---
 # From Du et al. 2011
-Ca_max = 0.8 # uM
+Ca_max = 0.6
 T0 = 1.0 # normalised
 beta = 1.45
 Ca50 = 1.95 # uM
 h = 2.5
-k_passive = 0.2 # currently made up
+k_passive = 0.5 # currently made up
 
 D0 = 2.5 # mm
 lam = np.ones(n_nodes)
@@ -103,11 +105,12 @@ diameter = np.full(n_nodes, D0)
 diameter_function = dolfinx.fem.Function(V_m_space, name="diameter")
 
 # --- Weak form ---
-dt = 1.0
+dt = 1
 C_m = 1.0
 sigma_i = dolfinx.fem.Constant(mesh, 0.1)
 sigma_e = dolfinx.fem.Constant(mesh, 0.2)
 stim_start_step = int(stim_start / dt)
+stim_end_step = int(stim_end / dt)
 stim_duration_step = int(stim_duration / dt)
 stim_period_step = int(stim_period / dt)
 
@@ -153,13 +156,14 @@ def solve_all_odes(states, t, dt, parameters, n_nodes):
     return states
 
 # --- Time stepping ---
-T = 10000.0
+T = 350000.0
 t = 0.0
 i = 0
 
+tic = time.perf_counter()
 while t < T:
     # Stimulation
-    if i >= stim_start_step and (i - stim_start_step) % stim_period_step <= stim_duration_step:
+    if stim_start_step <= i <= stim_end_step and (i - stim_start_step) % stim_period_step < stim_duration_step:
         parameters[stim_mask, I_stim_idx] = stim_amp
     else:
         parameters[stim_mask, I_stim_idx] = 0.0
@@ -191,7 +195,7 @@ while t < T:
 
     states[:, v_idx] = V_m_n.x.array[:n_nodes]
 
-    if i % 100 == 0:
+    if t % 100 == 0:
         global_max = comm.allreduce(V_m_n.x.array.max(), op=MPI.MAX)
         global_min = comm.allreduce(V_m_n.x.array.min(), op=MPI.MIN)
         if comm.rank == 0:
@@ -211,3 +215,6 @@ while t < T:
     i += 1
 
 vtx.close()
+
+toc = time.perf_counter()
+print(f"Successfully ran the model in {toc - tic:0.4f} seconds")
